@@ -3,22 +3,20 @@ name: Sync and Build
 on:
   repository_dispatch:
     types: [sync-from-obsidian]
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
   sync-and-build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout blog repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Hugo theme
+      - name: Clone Hugo theme
         run: |
-          mkdir -p themes
+          rm -rf themes/PaperMod
           git clone --depth 1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
 
       - name: Checkout obsidian repo
@@ -26,14 +24,18 @@ jobs:
         with:
           repository: ColeNoice/obsidian-notes
           token: ${{ secrets.OBSIDIAN_REPO_PAT }}
-          path: obsidian-notes
+          path: _obsidian
 
       - name: Sync shared notes
         run: |
           mkdir -p content/posts
-          find obsidian-notes -name "*.md" -exec grep -l "share: true" {} \; | while read file; do
-            cp "$file" content/posts/
+          find _obsidian -name "*.md" -type f | while read file; do
+            if grep -q "^share: *true" "$file" || grep -q "^share:true" "$file"; then
+              cp "$file" content/posts/
+              echo "Synced: $file"
+            fi
           done
+          rm -rf _obsidian
 
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
@@ -41,13 +43,17 @@ jobs:
           hugo-version: 'latest'
           extended: true
 
-      - name: Build
+      - name: Build Hugo site
         run: hugo --minify
 
-      - name: Commit changes
+      - name: Commit and push changes
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
           git add -A
-          git diff --staged --quiet || git commit -m "Sync from Obsidian"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Sync from Obsidian [skip ci]"
+            git push
+          fi
