@@ -1,0 +1,49 @@
+name: Sync and Build
+
+on:
+  repository_dispatch:
+    types: [sync-from-obsidian]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout blog repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout obsidian repo
+        uses: actions/checkout@v4
+        with:
+          repository: ColeNoice/obsidian-notes
+          token: ${{ secrets.OBSIDIAN_REPO_PAT }}
+          path: obsidian-notes
+
+      - name: Sync shared notes
+        run: |
+          mkdir -p content/posts
+          find obsidian-notes -name "*.md" -exec grep -l "share: true" {} \; | while read file; do
+            cp "$file" content/posts/
+          done
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: 'latest'
+          extended: true
+
+      - name: Build
+        run: hugo --minify
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git diff --staged --quiet || git commit -m "Sync from Obsidian"
+          git push
