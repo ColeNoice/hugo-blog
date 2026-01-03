@@ -14,8 +14,12 @@ jobs:
       - name: Checkout blog repo
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      - name: Setup Hugo theme
+        run: |
+          mkdir -p themes
+          git clone --depth 1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
 
       - name: Checkout obsidian repo
         uses: actions/checkout@v4
